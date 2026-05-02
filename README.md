@@ -29,3 +29,8 @@ O app lê `data/checklists_delivery_mvp.csv` como base dos cards de checklist.
 - Sem login/senha.
 - Registro do nome do líder por sessão local.
 - Exportação CSV sem binários de anexos (somente referência nominal).
+
+
+## Rotas principais
+- `/preenchimento`
+- `/admin`
