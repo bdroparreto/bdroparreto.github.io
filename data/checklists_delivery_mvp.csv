@@ -1,0 +1,30 @@
+ID;Unidade;Categoria;Momento;Frequência;Horário previsto;Responsável sugerido;Tipo de resposta;Obrigatório?;Anexo ficha manual?;Foto ambiente?;Campo aberto?;Instrução do preenchimento;Status no MVP;Observações
+1;Delivery;Abertura da casa;Manhã;Diária;Início do turno / abertura;Líder de cozinha ou responsável da abertura;Anexo + Foto;Sim;Sim;Sim;Não;Anexar a ficha manual já preenchida e registrar foto do ambiente/praça após organização da abertura.;Ativo;
+2;Delivery;Checagem de temperatura 1;Manhã;Diária - 2x ao dia;Após abertura / início da operação;Responsável da cozinha/produção;Anexo;Sim;Sim;Não;Não;Anexar a ficha manual de temperatura preenchida pela manhã.;Ativo;Primeira checagem do dia
+3;Delivery;Checklist de praça 1;Manhã;Diária - 2x ao dia;Após abertura / antes do início do serviço;Responsável da praça;Foto + checklist simples;Sim;Não;Sim;Opcional;Registrar foto da praça pronta e sinalizar se está OK para operação.;Ativo;Checklist visual de ambiente/prontidão
+4;Delivery;Troca de turno;Troca de turno;Diária;No momento da troca de turno;Responsável que entrega o turno;Texto aberto;Sim;Não;Não;Sim;Preencher em texto o que está sendo entregue/passado: pendências, rupturas, avisos, prioridades e pontos de atenção.;Ativo;
+5;Delivery;Checklist de praça 2;Troca de turno;Diária - 2x ao dia;Durante a troca de turno;Responsável que recebe o turno;Foto + checklist simples;Sim;Não;Sim;Opcional;Registrar foto da praça na passagem de turno e sinalizar condições para continuidade da operação.;Ativo;Segunda checagem do dia
+6;Delivery;Checagem de temperatura 2;Antes do fechamento;Diária - 2x ao dia;Antes do fechamento;Responsável do fechamento;Anexo;Sim;Sim;Não;Não;Anexar a ficha manual de temperatura preenchida antes do fechamento.;Ativo;Segunda checagem do dia
+7;Delivery;Fechamento da casa;Fechamento;Diária;Final do turno / fechamento;Responsável do fechamento;Anexo + Foto;Sim;Sim;Sim;Não;Anexar a ficha manual de fechamento já preenchida e registrar foto do ambiente/praça após organização final.;Ativo;
+8;Delivery;Limpeza da casa;Manhã / fechamento / conforme rotina;Diária;Conforme rotina definida;Responsável da limpeza ou líder do turno;Foto;Sim;Não;Sim;Não;Registrar foto do ambiente/praça após limpeza para evidenciar execução do serviço.;Ativo;Pode ser usado por área/praça, se necessário
+9;Delivery;Manutenção;Quando houver problema;Sob demanda;No momento da identificação;Qualquer responsável do turno;Texto + Foto + Data;Sim;Não;Sim;Sim;Registrar item com problema, descrição objetiva, foto, data de identificação, responsável e status de acompanhamento.;Ativo;Usar aba Manutencao para controle detalhado
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
