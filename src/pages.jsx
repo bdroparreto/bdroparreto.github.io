@@ -107,6 +107,10 @@ export function AdminPage() {
   const pendAtras = REQUIRED.map(n=>({name:n,status:computeStatus(n,todaySubs)}));
   const pendentes = pendAtras.filter(x=>x.status==='pendente').length;
   const atrasados = pendAtras.filter(x=>x.status==='atrasado').length;
+  const statusByChecklist = REQUIRED.map((name)=>{ const sub=todaySubs.find(s=>s.checklist_name===name); if(!sub){return {name,status:computeStatus(name,todaySubs)};} if(sub.status==='Com problema') return {name,status:'com_problema',filledAt:sub.filled_at}; return {name,status:'concluido',filledAt:sub.filled_at}; });
+  const pontuais = statusByChecklist.filter(x=>x.status==='concluido'&&(() => { const [h,m]=LIMITS[x.name].split(':').map(Number); const d=new Date(x.filledAt); return (d.getHours()*60+d.getMinutes()) <= (h*60+m); })()).length;
+  const atrasadosHoje = statusByChecklist.filter(x=>x.status==='atrasado' || (x.status==='concluido'&&(() => { const [h,m]=LIMITS[x.name].split(':').map(Number); const d=new Date(x.filledAt); return (d.getHours()*60+d.getMinutes()) > (h*60+m); })())).length;
+  const naoRealizados = statusByChecklist.filter(x=>x.status==='atrasado').length;
   const openedManu = manu.filter(m=>(m.status||'').toLowerCase()!=='resolvido');
   const urg = openedManu.filter(m=>(m.criticidade||'').toLowerCase()==='urgente').length;
   const grave = openedManu.filter(m=>(m.criticidade||'').toLowerCase()==='grave').length;
@@ -146,34 +150,29 @@ export function AdminPage() {
     } catch { setCopyMsg('Não foi possível copiar.'); }
   };
 
-  const msgResumo = `📋 Resumo checklists - Delivery
-
-Cumprimento hoje: ${todayRequired}/3 (${cumprimentoPct}%)
-Preenchidos: ${todayRequired}
-Pendentes: ${pendentes}
-Atrasados: ${atrasados}
-Com problema: ${statusCount.comProblema}
-Alertas manutenção: ${urg+grave} graves/urgentes
-
-Acompanhar no painel admin.`;
+  const pendSintese = pendAtras.filter(p=>p.status!=='preenchido').map(p=>`- ${p.name} — ${p.status==='atrasado'?'atrasado':'pendente'}`).join('\n');
+  const msgResumo = `📋 Resumo checklists - Delivery\n\nConclusão do dia: ${todayRequired}/3 (${cumprimentoPct}%)\nPontuais: ${pontuais}\nAtrasados: ${atrasadosHoje}\nNão realizados: ${naoRealizados}\nCom problema: ${statusCount.comProblema}\nAlertas críticos/urgentes: ${urg+grave}\n\nPendências:\n${pendSintese || 'nenhuma no momento.'}\n\nAcompanhar no painel admin.`;
   const pendList = pendAtras.filter(p=>p.status==='pendente').map(p=>`- ${p.name}`).join('\n');
   const atrList = pendAtras.filter(p=>p.status==='atrasado').map(p=>`- ${p.name}`).join('\n');
-  const msgPend = (pendList||atrList) ? `⚠️ Pendências checklists - Delivery\n\nPendentes:\n${pendList||'- Nenhum'}\n\nAtrasados:\n${atrList||'- Nenhum'}\n\nFavor verificar com o líder do turno.` : `✅ Pendências checklists - Delivery\n\nNenhuma pendência ou atraso no momento.`;
+  const msgPend = (pendList||atrList) ? `⚠️ Pendências checklists - Delivery\n\nPendentes:\n${pendList||'- Nenhum'}\n\nAtrasados/Não realizados:\n${atrList||'- Nenhum'}\n\nFavor verificar com o líder do turno.` : `✅ Pendências checklists - Delivery\n\nNenhuma pendência no momento.`;
   const critAlerts = openedManu.filter(m=>['grave','urgente'].includes((m.criticidade||'').toLowerCase()));
   const preview = critAlerts.slice(0,5).map(m=>`- [${(m.criticidade||'não informado').toUpperCase()}] ${(m.item_problema||'item não informado')}/${(m.area_praca||'item não informado')}: ${m.descricao_problema||'sem descrição'}`).join('\n');
-  const msgAlerta = critAlerts.length ? `🚨 Alertas manutenção - Delivery\n\n${preview}\n\nTotal: ${critAlerts.length} alerta(s) grave(s)/urgente(s)\n${critAlerts.length>5?`+ ${critAlerts.length-5} outros alertas no painel admin.\n`:''}\nFavor verificar prioridade.` : `✅ Alertas manutenção - Delivery\n\nNenhum alerta grave ou urgente aberto no momento.`;
+  const msgAlerta = critAlerts.length ? `🚨 Alertas manutenção - Delivery\n\n${preview}\n\nTotal: ${critAlerts.length} alerta(s) grave(s)/urgente(s)\n${critAlerts.length>5?`+ ${critAlerts.length-5} outros alertas no painel admin.\n`:''}\nFavor verificar prioridade.` : `✅ Alertas manutenção - Delivery\n\nNenhum alerta grave/urgente aberto no momento.`;
 
   return <main><header className='brand-header'><img src='/logo-notorious-fish.png' alt='Notorious Fish' className='brand-logo' onError={(e)=>{e.currentTarget.style.display='none'; e.currentTarget.nextSibling.style.display='inline-block';}}/><span className='brand-fallback'>Notorious Fish</span><h1>Painel Administrativo</h1></header><p>Resumo operacional dos checklists</p><p><a href='/preenchimento'>Acessar preenchimento</a></p>
   <section className='dash-grid main-kpis'>
     <article className='dash-card'><h3>Cumprimento hoje</h3><p className='kpi-main'><b>{todayRequired}/3</b> · {cumprimentoPct}%</p><div className='progress'><div style={{width:`${cumprimentoPct}%`}} /></div></article>
-    <article className='dash-card'><h3>Preenchidos hoje</h3><p className='kpi-main'><b>{todayRequired}</b></p></article>
-    <article className='dash-card'><h3>Pendentes / Atrasados</h3><p><span className='chip warn'>{pendentes} pendentes</span></p><p><span className='chip danger'>{atrasados} atrasados</span></p></article>
     <article className='dash-card'><h3>Alertas críticos e urgentes</h3><p className='kpi-main'><b>{urg+grave}</b></p><p>{urg+grave===0?'sem alertas críticos':`${urg} urgente · ${grave} grave`}</p></article>
   </section>
+  <section className='dash-grid kpi-row'>
+    <article className='dash-card'><h3>Pontuais hoje</h3><p className='kpi-main'><b>{pontuais}</b></p></article>
+    <article className='dash-card'><h3>Atrasados hoje</h3><p className='kpi-main'><b>{atrasadosHoje}</b></p></article>
+    <article className='dash-card'><h3>Não realizados</h3><p className='kpi-main'><b>{naoRealizados}</b></p></article>
+  </section>
   <section className='dash-grid'>
-    <article className='dash-card'><h3>Ranking de preenchimento (7 dias)</h3>{ranking.length===0?<p>Sem dados</p>:<ol>{ranking.map(([n,v])=>{const max=ranking[0][1]||1;return <li key={n}>{n} — {v}<div className='mini-bar'><span style={{width:`${Math.round((v/max)*100)}%`}} /></div></li>})}</ol>}</article>
     <article className='dash-card'><h3>Pendências de hoje</h3>{pendAtras.filter(p=>p.status!=='preenchido').length===0?<p>Nenhuma pendência hoje</p>:pendAtras.filter(p=>p.status!=='preenchido').map(p=><p key={p.name}>{p.name} — <span className={`chip ${p.status==='atrasado'?'danger':'warn'}`}>{p.status==='atrasado'?'Atrasado':'Pendente'}</span></p>)}</article>
-    <article className='dash-card'><h3>Status dos checklists</h3><p><span className='chip ok'>Preenchido: {statusCount.preenchido}</span></p><p><span className='chip neutral'>Com problema: {statusCount.comProblema}</span></p><p><span className='chip warn'>Pendente: {statusCount.pendente}</span></p><p><span className='chip danger'>Atrasado: {statusCount.atrasado}</span></p></article>
+    <article className='dash-card'><h3>Status dos checklists</h3><p><span className='chip ok'>Concluído: {todayRequired}</span></p><p><span className='chip ok'>Pontual: {pontuais}</span></p><p><span className='chip danger'>Atrasado: {atrasadosHoje}</span></p><p><span className='chip warn'>Não realizado: {naoRealizados}</span></p><p><span className='chip neutral'>Com problema: {statusCount.comProblema}</span></p></article>
+    <article className='dash-card'><h3>Ranking de execução (7 dias)</h3>{ranking.length===0?<p>Sem dados</p>:<ol>{ranking.map(([n,v])=>{const max=ranking[0][1]||1;return <li key={n}>{n} — {v}<div className='mini-bar'><span style={{width:`${Math.round((v/max)*100)}%`}} /></div></li>})}</ol>}</article>
   </section>
   <section className='dash-card whatsapp-box'><h3>Alertas para WhatsApp</h3><p>Mensagens prontas para colar no grupo da operação.</p><div className='admin-actions'><button onClick={()=>copyText(msgResumo)}>Copiar resumo do dia</button><button onClick={()=>copyText(msgPend)}>Copiar pendências de hoje</button><button onClick={()=>copyText(msgAlerta)}>Copiar alertas graves/urgentes</button></div>{copyMsg && <p className='chip ok'>{copyMsg}</p>}</section><div className='admin-actions'><button onClick={fetchData}>Atualizar</button><button onClick={exportCsv}>Exportar CSV</button></div>
   <table><thead><tr><th>Data</th><th>Horário</th><th>Card</th><th>Responsável</th><th>Status</th><th>Observações</th><th>Problema</th><th>Manutenção</th><th>Anexos</th></tr></thead><tbody>{subs.map((r) => {const maint = manu.find(m=>m.submission_id===r.id); return <tr key={r.id}><td>{r.date}</td><td>{r.filled_at}</td><td>{r.checklist_name}</td><td>{r.operator_name}</td><td><span className='status-pill'>{r.status}</span></td><td>{r.observacoes||'—'}</td><td>{r.status==='Com problema'||r.has_problem?'Sim':'Não'}</td><td>{maint?'Sim':'Não'}</td><td>{(() => { const fs = files.filter(f => f.submission_id === r.id); if (fs.length===0) return '—'; return fs.map(f => isExpired40(f, r.date) ? <span key={f.id} className='chip neutral'>expirado</span> : <button key={f.id} className='link-btn' onClick={()=>openAttachment(f, r.date)}>{(f.file_type||'').includes('pdf')?'Abrir PDF':'Ver foto'}</button>); })()}</td></tr>})}</tbody></table></main>;

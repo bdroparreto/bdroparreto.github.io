@@ -4,3 +4,4 @@ body{font-family:Arial,sans-serif;margin:0;background:var(--color-vieira);color:
 @media(min-width:768px){.brand-logo{height:40px}.modal{align-items:center;padding:12px}.modal .form-card{border-radius:16px}.grid{grid-template-columns:repeat(4,1fr)}.dash-grid{grid-template-columns:repeat(4,1fr)}.whatsapp-box .admin-actions{flex-direction:row}}
 
 .link-btn{width:auto;padding:4px 8px;margin:2px;border-radius:8px;border:1px solid var(--color-agua);background:#fff;color:var(--color-oceano);font-size:.8rem}
+.main-kpis{grid-template-columns:2fr 1fr}.kpi-row{grid-template-columns:repeat(3,1fr)}
