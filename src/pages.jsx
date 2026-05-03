@@ -116,6 +116,36 @@ export function AdminPage() {
   const exportCsv = () => { const rows = ['data,checklist,responsavel,horario_envio,status,observacoes,itens_marcados,teve_problema,manutencao,anexos']; subs.forEach((r) => { const itens = JSON.stringify(r.responses_json?.items || {}); const ann = files.filter(f => f.submission_id === r.id).map(f => fileUrl(f.file_path)).join('|'); const maint = manu.find(m => m.submission_id === r.id); rows.push([r.date, r.checklist_name, r.operator_name, r.filled_at, r.status, `"${(r.observacoes || '').replaceAll('"', '""')}"`, `"${itens.replaceAll('"', '""')}"`, r.has_problem ? 'Sim' : 'Não', maint ? 'Sim' : 'Não', ann].join(',')); }); const blob = new Blob([rows.join('\n')]); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'historico_checklists.csv'; a.click(); };
 
   const statusCount = { preenchido: todaySubs.filter(s=>s.status==='Preenchido').length, comProblema: todaySubs.filter(s=>s.status==='Com problema').length, pendente: pendentes, atrasado: atrasados };
+
+  const [copyMsg, setCopyMsg] = useState('');
+  const copyText = async (text) => {
+    try {
+      if (navigator?.clipboard?.writeText) await navigator.clipboard.writeText(text);
+      else {
+        const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+      }
+      setCopyMsg('Mensagem copiada.');
+      setTimeout(()=>setCopyMsg(''), 2500);
+    } catch { setCopyMsg('Não foi possível copiar.'); }
+  };
+
+  const msgResumo = `📋 Resumo checklists - Delivery
+
+Cumprimento hoje: ${todayRequired}/3 (${cumprimentoPct}%)
+Preenchidos: ${todayRequired}
+Pendentes: ${pendentes}
+Atrasados: ${atrasados}
+Com problema: ${statusCount.comProblema}
+Alertas manutenção: ${urg+grave} graves/urgentes
+
+Acompanhar no painel admin.`;
+  const pendList = pendAtras.filter(p=>p.status==='pendente').map(p=>`- ${p.name}`).join('\n');
+  const atrList = pendAtras.filter(p=>p.status==='atrasado').map(p=>`- ${p.name}`).join('\n');
+  const msgPend = (pendList||atrList) ? `⚠️ Pendências checklists - Delivery\n\nPendentes:\n${pendList||'- Nenhum'}\n\nAtrasados:\n${atrList||'- Nenhum'}\n\nFavor verificar com o líder do turno.` : `✅ Pendências checklists - Delivery\n\nNenhuma pendência ou atraso no momento.`;
+  const critAlerts = openedManu.filter(m=>['grave','urgente'].includes((m.criticidade||'').toLowerCase()));
+  const preview = critAlerts.slice(0,5).map(m=>`- [${(m.criticidade||'não informado').toUpperCase()}] ${(m.item_problema||'item não informado')}/${(m.area_praca||'item não informado')}: ${m.descricao_problema||'sem descrição'}`).join('\n');
+  const msgAlerta = critAlerts.length ? `🚨 Alertas manutenção - Delivery\n\n${preview}\n\nTotal: ${critAlerts.length} alerta(s) grave(s)/urgente(s)\n${critAlerts.length>5?`+ ${critAlerts.length-5} outros alertas no painel admin.\n`:''}\nFavor verificar prioridade.` : `✅ Alertas manutenção - Delivery\n\nNenhum alerta grave ou urgente aberto no momento.`;
+
   return <main><h1>Painel Administrativo</h1><p>Resumo operacional dos checklists</p><p><a href='/preenchimento'>Acessar preenchimento</a></p>
   <section className='dash-grid main-kpis'>
     <article className='dash-card'><h3>Cumprimento hoje</h3><p className='kpi-main'><b>{todayRequired}/3</b> · {cumprimentoPct}%</p><div className='progress'><div style={{width:`${cumprimentoPct}%`}} /></div></article>
@@ -128,6 +158,6 @@ export function AdminPage() {
     <article className='dash-card'><h3>Pendências de hoje</h3>{pendAtras.filter(p=>p.status!=='preenchido').length===0?<p>Nenhuma pendência hoje</p>:pendAtras.filter(p=>p.status!=='preenchido').map(p=><p key={p.name}>{p.name} — <span className={`chip ${p.status==='atrasado'?'danger':'warn'}`}>{p.status==='atrasado'?'Atrasado':'Pendente'}</span></p>)}</article>
     <article className='dash-card'><h3>Status dos checklists</h3><p><span className='chip ok'>Preenchido: {statusCount.preenchido}</span></p><p><span className='chip neutral'>Com problema: {statusCount.comProblema}</span></p><p><span className='chip warn'>Pendente: {statusCount.pendente}</span></p><p><span className='chip danger'>Atrasado: {statusCount.atrasado}</span></p></article>
   </section>
-  <div className='admin-actions'><button onClick={fetchData}>Atualizar</button><button onClick={exportCsv}>Exportar CSV</button></div>
+  <section className='dash-card whatsapp-box'><h3>Alertas para WhatsApp</h3><p>Mensagens prontas para colar no grupo da operação.</p><div className='admin-actions'><button onClick={()=>copyText(msgResumo)}>Copiar resumo do dia</button><button onClick={()=>copyText(msgPend)}>Copiar pendências de hoje</button><button onClick={()=>copyText(msgAlerta)}>Copiar alertas graves/urgentes</button></div>{copyMsg && <p className='chip ok'>{copyMsg}</p>}</section><div className='admin-actions'><button onClick={fetchData}>Atualizar</button><button onClick={exportCsv}>Exportar CSV</button></div>
   <table><thead><tr><th>Data</th><th>Horário</th><th>Card</th><th>Responsável</th><th>Status</th><th>Observações</th><th>Problema</th><th>Manutenção</th><th>Anexos</th></tr></thead><tbody>{subs.map((r) => {const maint = manu.find(m=>m.submission_id===r.id); return <tr key={r.id}><td>{r.date}</td><td>{r.filled_at}</td><td>{r.checklist_name}</td><td>{r.operator_name}</td><td><span className='status-pill'>{r.status}</span></td><td>{r.observacoes||'—'}</td><td>{r.status==='Com problema'||r.has_problem?'Sim':'Não'}</td><td>{maint?'Sim':'Não'}</td><td>{files.filter(f => f.submission_id === r.id).map(f => <a key={f.id} href={fileUrl(f.file_path)} target='_blank'>{f.file_name}</a>)}</td></tr>})}</tbody></table></main>;
 }
