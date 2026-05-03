@@ -9,6 +9,12 @@ const nowHm = () => new Date().toTimeString().slice(0, 5);
 const toMinutes = (hhmm) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
 const fileUrl = (path) => supabase.storage.from('checklist-files').getPublicUrl(path).data.publicUrl;
 
+const REQUIRED = ['ABERTURA','TROCA DE TURNO','FECHAMENTO'];
+const LIMITS = { ABERTURA: '10:30', 'TROCA DE TURNO': '16:20', FECHAMENTO: '23:30' };
+const dateMinusDays=(d)=>{const x=new Date();x.setDate(x.getDate()-d);return x.toISOString().slice(0,10)};
+const computeStatus=(name,todaySubs)=>{if(todaySubs.find(s=>s.checklist_name===name)) return 'preenchido'; const [h,m]=LIMITS[name].split(':').map(Number); const now=new Date(); return (now.getHours()*60+now.getMinutes())>(h*60+m)?'atrasado':'pendente';};
+
+
 function csvFallback() {
   const parsed = Papa.parse(csvRaw, { header: true, delimiter: ';' }).data.filter((r) => r.nome_checklist);
   const map = {};
@@ -93,6 +99,33 @@ export function AdminPage() {
   const [subs, setSubs] = useState([]); const [files, setFiles] = useState([]); const [manu, setManu] = useState([]);
   const fetchData = async () => { const { data: s } = await supabase.from('submissions').select('*').order('filled_at', { ascending: false }); const { data: f } = await supabase.from('submission_files').select('*'); const { data: m } = await supabase.from('maintenance_records').select('*').order('date', { ascending: false }); setSubs(s || []); setFiles(f || []); setManu(m || []); };
   useEffect(() => { fetchData(); }, []);
+
+  const t = today();
+  const todaySubs = subs.filter(s=>s.date===t);
+  const todayRequired = REQUIRED.filter(n=>todaySubs.some(s=>s.checklist_name===n && (s.status==='Preenchido'||s.status==='Com problema'))).length;
+  const cumprimentoPct = Math.round((todayRequired/3)*100);
+  const pendAtras = REQUIRED.map(n=>({name:n,status:computeStatus(n,todaySubs)}));
+  const pendentes = pendAtras.filter(x=>x.status==='pendente').length;
+  const atrasados = pendAtras.filter(x=>x.status==='atrasado').length;
+  const openedManu = manu.filter(m=>(m.status||'').toLowerCase()!=='resolvido');
+  const urg = openedManu.filter(m=>(m.criticidade||'').toLowerCase()==='urgente').length;
+  const grave = openedManu.filter(m=>(m.criticidade||'').toLowerCase()==='grave').length;
+  const last7 = subs.filter(s=>s.date>=dateMinusDays(6));
+  const ranking = Object.entries(last7.reduce((a,s)=>{a[s.operator_name]=(a[s.operator_name]||0)+1;return a;},{})).sort((a,b)=>b[1]-a[1]).slice(0,3);
+
   const exportCsv = () => { const rows = ['data,checklist,responsavel,horario_envio,status,observacoes,itens_marcados,teve_problema,manutencao,anexos']; subs.forEach((r) => { const itens = JSON.stringify(r.responses_json?.items || {}); const ann = files.filter(f => f.submission_id === r.id).map(f => fileUrl(f.file_path)).join('|'); const maint = manu.find(m => m.submission_id === r.id); rows.push([r.date, r.checklist_name, r.operator_name, r.filled_at, r.status, `"${(r.observacoes || '').replaceAll('"', '""')}"`, `"${itens.replaceAll('"', '""')}"`, r.has_problem ? 'Sim' : 'Não', maint ? 'Sim' : 'Não', ann].join(',')); }); const blob = new Blob([rows.join('\n')]); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'historico_checklists.csv'; a.click(); };
-  return <main><h1>Painel Administrativo</h1><p><a href='/preenchimento'>Acessar preenchimento</a> · <a href='/admin'>Acessar painel admin</a></p><button onClick={fetchData}>Atualizar</button><button onClick={exportCsv}>Exportar CSV</button><table><thead><tr><th>Data</th><th>Card</th><th>Responsável</th><th>Status</th><th>Observações</th><th>Itens</th><th>Anexos</th></tr></thead><tbody>{subs.map((r) => <tr key={r.id}><td>{r.date}</td><td>{r.checklist_name}</td><td>{r.operator_name}</td><td>{r.status}</td><td>{r.observacoes || '-'}</td><td><pre>{JSON.stringify(r.responses_json?.items || {}, null, 2)}</pre></td><td>{files.filter(f => f.submission_id === r.id).map(f => <a key={f.id} href={fileUrl(f.file_path)} target='_blank'>{f.file_name}</a>)}</td></tr>)}</tbody></table></main>;
+
+  return <main><h1>Painel Admin</h1><p>Resumo operacional dos checklists</p><p><a href='/preenchimento'>Acessar preenchimento</a></p>
+  <section className='dash-grid'>
+    <article className='dash-card'><h3>Cumprimento hoje</h3><p><b>{todayRequired}/3</b> · {cumprimentoPct}%</p></article>
+    <article className='dash-card'><h3>Preenchidos hoje</h3><p><b>{todayRequired}</b></p></article>
+    <article className='dash-card'><h3>Pendentes / Atrasados</h3><p><span className='warn'>{pendentes} pendentes</span> · <span className='danger'>{atrasados} atrasados</span></p></article>
+    <article className='dash-card'><h3>Alertas críticos</h3><p>{urg} urgente · {grave} grave</p></article>
+  </section>
+  <section className='dash-grid'>
+    <article className='dash-card'><h3>Ranking (7 dias)</h3><ol>{ranking.map(([n,v])=><li key={n}>{n} — {v}</li>)}</ol></article>
+    <article className='dash-card'><h3>Pendências de hoje</h3>{pendAtras.filter(p=>p.status!=='preenchido').map(p=><p key={p.name}>{p.name} — <span className={p.status==='atrasado'?'danger':'warn'}>{p.status}</span></p>)}</article>
+  </section>
+  <button onClick={fetchData}>Atualizar</button><button onClick={exportCsv}>Exportar CSV</button>
+  <table><thead><tr><th>Data</th><th>Horário</th><th>Card</th><th>Responsável</th><th>Status</th><th>Problema</th><th>Manutenção</th><th>Anexos</th></tr></thead><tbody>{subs.map((r) => {const maint = manu.find(m=>m.submission_id===r.id); return <tr key={r.id}><td>{r.date}</td><td>{r.filled_at}</td><td>{r.checklist_name}</td><td>{r.operator_name}</td><td><span className='status-pill'>{r.status}</span></td><td>{r.has_problem?'Sim':'Não'}</td><td>{maint?'Sim':'Não'}</td><td>{files.filter(f => f.submission_id === r.id).map(f => <a key={f.id} href={fileUrl(f.file_path)} target='_blank'>{f.file_name}</a>)}</td></tr>})}</tbody></table></main>;
 }
