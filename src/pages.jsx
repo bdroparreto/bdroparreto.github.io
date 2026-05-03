@@ -1,125 +1,103 @@
+import Papa from 'papaparse';
 import { useEffect, useMemo, useState } from 'react';
+import csvRaw from '../data/checklists_delivery_mvp.csv?raw';
 import { supabase } from './lib/supabaseClient';
 
-const maintenanceTriggers = ['Abertura da casa', 'Checagem de temperatura 1', 'Troca de turno', 'Checagem de temperatura 2', 'Fechamento da casa'];
+const MAIN_ORDER = ['ABERTURA', 'TROCA DE TURNO', 'FECHAMENTO', 'MANUTENÇÃO'];
 const today = () => new Date().toISOString().slice(0, 10);
-const deadlineText = (h) => h || 'Conforme rotina';
+const nowHm = () => new Date().toTimeString().slice(0, 5);
+const toMinutes = (hhmm) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
 const fileUrl = (path) => supabase.storage.from('checklist-files').getPublicUrl(path).data.publicUrl;
 
-async function uploadFile(file, folder) {
-  if (!file) return null;
-  const ext = file.name.split('.').pop();
-  const path = `${folder}/${crypto.randomUUID()}.${ext}`;
-  const { error } = await supabase.storage.from('checklist-files').upload(path, file, { upsert: false });
-  if (error) throw error;
-  return { name: file.name, path, type: file.type || 'application/octet-stream', url: fileUrl(path) };
+const fallback = {
+  ABERTURA: { horario: 'Até 10:30', items: ['Produções', 'Etiquetas', 'Conferência de Chapa, Fritadeira e Broiler', 'Conferência Geladeiras e Freezers', 'Requisição de viagens', 'Itens com problema'] },
+  'TROCA DE TURNO': { horario: '14:40 às 16:20', items: ['Produções', 'Etiquetas', 'Reposições - geladeira/molhos', 'Caixinhas/embalagens', 'Limpeza das praças', 'Fichas de Temperatura', 'Recebimento de viagem', 'Itens com problema'] },
+  FECHAMENTO: { horario: '22:00 às 23:30', items: ['Limpeza das praças', 'Limpeza de equipamentos', 'Filme nas GNs da pista fria', 'Geladeiras e Freezers fechados e funcionando', 'Lista de reposições e pedidos', 'Itens com problema'] },
+  'MANUTENÇÃO': { horario: 'Conforme sinalização', items: ['Setor', 'Equipamento', 'Descrição breve do problema', 'Criticidade do problema', 'Evidência do problema'] },
+};
+
+function parseCsvStructure() {
+  const parsed = Papa.parse(csvRaw, { header: true, delimiter: ';' }).data.filter(Boolean);
+  const hasNew = parsed[0] && 'nome_checklist' in parsed[0];
+  if (hasNew) {
+    const grouped = {};
+    parsed.filter((r) => r.nome_checklist).forEach((r) => {
+      const name = (r.nome_checklist || '').toUpperCase();
+      grouped[name] ??= { horario: r.horario || '', items: [] };
+      grouped[name].items.push({ item: r.item_checklist, tipo: (r.tipo_resposta || 'check').toLowerCase(), foto: (r.foto || '').toLowerCase() === 'sim', obrigatorio: (r.obrigatorio || '').toLowerCase() === 'sim', ordem: Number(r.ordem || 999), observacao: r.observacao || '' });
+    });
+    return grouped;
+  }
+  const fromPrompt = {};
+  Object.entries(fallback).forEach(([k, v]) => {
+    fromPrompt[k] = { horario: v.horario, items: v.items.map((it, i) => ({ item: it, tipo: it === 'Itens com problema' ? 'sim_nao' : it.includes('Setor') || it.includes('Criticidade') ? 'select' : it.includes('Equipamento') || it.includes('Descrição') ? 'texto' : 'check', foto: ['Limpeza das praças', 'Limpeza de equipamentos', 'Filme nas GNs da pista fria', 'Geladeiras e Freezers fechados e funcionando', 'Evidência do problema'].includes(it), obrigatorio: true, ordem: i + 1, observacao: '' })) };
+  });
+  return fromPrompt;
 }
 
-function ChecklistForm({ check, onClose, onSave, operator, saving }) {
-  const [f, setF] = useState({ observacoes: '', oknok: 'OK', passagem: '', hasProblem: 'Não' });
-  const [files, setFiles] = useState({ manual: null, foto: null });
-  const [m, setM] = useState({ area: '', item: '', descricao: '', criticidade: 'Média', status: 'Aberto', prazo: '', observacoes: '' });
-  const needsManual = check.anexo_manual;
-  const needsPhoto = check.foto_ambiente;
-  const needsText = check.categoria === 'Troca de turno';
-  const needsOknok = check.categoria.includes('Checklist de praça') || check.categoria.includes('Limpeza');
-  const valid = (!needsManual || files.manual) && (!needsPhoto || files.foto) && (!needsText || f.passagem.trim()) && operator.trim();
+async function uploadFile(file, folder) { if (!file) return null; const ext = file.name.split('.').pop(); const path = `${folder}/${crypto.randomUUID()}.${ext}`; const { error } = await supabase.storage.from('checklist-files').upload(path, file, { upsert: false }); if (error) throw error; return { name: file.name, path, type: file.type || 'application/octet-stream' }; }
 
-  return <div className='modal'><div className='card'><h3>{check.categoria}</h3><input type='time' defaultValue={new Date().toTimeString().slice(0, 5)} readOnly /><p>Responsável: <b>{operator}</b></p>{needsOknok && <select onChange={e => setF({ ...f, oknok: e.target.value })}><option>OK</option><option>NOK</option><option>Conforme</option><option>Não conforme</option></select>}{needsText && <textarea placeholder='Pendências e avisos' onChange={e => setF({ ...f, passagem: e.target.value })} />}<textarea placeholder='Observações (opcional)' onChange={e => setF({ ...f, observacoes: e.target.value })} />{needsManual && <input type='file' accept='image/*,.pdf' onChange={e => setFiles({ ...files, manual: e.target.files?.[0] || null })} />}<input type='file' accept='image/*,.pdf' onChange={e => setFiles({ ...files, foto: e.target.files?.[0] || null })} /><label>Há problema?</label><select onChange={e => setF({ ...f, hasProblem: e.target.value })}><option>Não</option><option>Sim</option></select>{f.hasProblem === 'Sim' && maintenanceTriggers.includes(check.categoria) && <div><h4>Manutenção</h4><input placeholder='Área/Praça' onChange={e => setM({ ...m, area: e.target.value })} /><input placeholder='Item com problema' onChange={e => setM({ ...m, item: e.target.value })} /><textarea placeholder='Descrição' onChange={e => setM({ ...m, descricao: e.target.value })} /><select onChange={e => setM({ ...m, criticidade: e.target.value })}><option>Baixa</option><option>Média</option><option>Alta</option><option>Crítica</option></select></div>}<button disabled={!valid || saving} onClick={() => onSave({ check, f, files, m })}>{saving ? 'Salvando...' : 'Finalizar'}</button><button onClick={onClose} disabled={saving}>Cancelar</button></div></div>;
+function statusFrom(check, todaySub) {
+  const s = todaySub.find((x) => x.checklist_name === check);
+  if (s) return s.has_problem ? 'Com problema' : 'Preenchido';
+  const now = toMinutes(nowHm());
+  const limits = { ABERTURA: 10 * 60 + 30, 'TROCA DE TURNO': 16 * 60 + 20, FECHAMENTO: 23 * 60 + 30 };
+  if (limits[check] && now > limits[check]) return 'Atrasado';
+  return 'Pendente';
+}
+
+function FillCardForm({ name, config, operator, onSave, saving, onClose, origin }) {
+  const [answers, setAnswers] = useState({});
+  const [files, setFiles] = useState({});
+  const items = [...config.items].sort((a, b) => a.ordem - b.ordem);
+  const missing = items.filter((it) => it.obrigatorio && ((it.foto && !files[it.item]) || (!it.foto && (answers[it.item] === undefined || answers[it.item] === ''))));
+  const valid = operator.trim() && missing.length === 0;
+  return <div className='modal'><div className='card'><h2>{name}</h2>{origin && <p><b>Origem:</b> {origin}</p>}<p><b>Horário:</b> {config.horario}</p>{items.map((it) => <div key={it.item}><label><b>{it.item}</b> {it.obrigatorio ? '*' : ''}</label>{it.tipo === 'check' && <input type='checkbox' checked={!!answers[it.item]} onChange={e => setAnswers({ ...answers, [it.item]: e.target.checked ? 'ok' : '' })} />}{it.tipo === 'sim_nao' && <select onChange={e => setAnswers({ ...answers, [it.item]: e.target.value })}><option value=''>Selecione</option><option>Sim</option><option>Não</option></select>}{it.tipo === 'texto' && <input onChange={e => setAnswers({ ...answers, [it.item]: e.target.value })} />}{it.tipo === 'select' && <select onChange={e => setAnswers({ ...answers, [it.item]: e.target.value })}><option value=''>Selecione</option>{it.item === 'Setor' && ['Cozinha', 'Expedição', 'Infraestrutura'].map(v => <option key={v}>{v}</option>)}{it.item === 'Criticidade do problema' && ['baixa', 'média', 'grave', 'urgente'].map(v => <option key={v}>{v}</option>)}</select>}{it.foto && <input type='file' accept='image/*,.pdf' onChange={e => setFiles({ ...files, [it.item]: e.target.files?.[0] || null })} />}</div>)}{missing.length > 0 && <p>Preencha todos os campos obrigatórios antes de finalizar.</p>}<button disabled={!valid || saving} onClick={() => onSave({ name, answers, files, origin })}>Finalizar</button><button onClick={onClose}>Cancelar</button></div></div>;
 }
 
 export function FillPage() {
   const [operator, setOperator] = useState(localStorage.getItem('operator') || '');
-  const [checklists, setChecklists] = useState([]);
+  const [structure] = useState(parseCsvStructure());
   const [subs, setSubs] = useState([]);
-  const [active, setActive] = useState();
+  const [active, setActive] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
 
-  const ordered = useMemo(() => [...checklists].sort((a, b) => (a.id - b.id)), [checklists]);
+  const cards = useMemo(() => MAIN_ORDER.filter((n) => structure[n]).map((n) => ({ name: n, ...structure[n] })), [structure]);
+  const fetchSubs = async () => { const { data } = await supabase.from('submissions').select('*').eq('date', today()); setSubs(data || []); };
 
-  async function fetchChecklistsAndSubmissions() {
-    setLoading(true);
-    const { data: cData, error: cErr } = await supabase.from('checklists').select('*').eq('unidade', 'Delivery').order('id');
-    if (cErr) alert(`Erro ao carregar checklists do Supabase: ${cErr.message}`);
-    setChecklists(cData || []);
-    const { data: sData, error: sErr } = await supabase.from('submissions').select('*, submission_files(*)').eq('date', today());
-    if (sErr) alert(`Erro ao carregar envios do dia: ${sErr.message}`);
-    setSubs(sData || []);
-    setLoading(false);
-  }
-
-  const status = (c) => {
-    const s = subs.find((x) => Number(x.checklist_id) === Number(c.id) && x.date === today());
-    if (s) return s.has_problem ? 'Com problema' : 'Preenchido';
-    return 'Pendente';
-  };
-
-  async function save({ check, f, files, m }) {
+  async function saveSubmission({ name, answers, files, origin }) {
     setSaving(true);
     try {
-      if (!check?.id) throw new Error('Checklist inválido. Atualize a página e tente novamente.');
-      const exists = checklists.some((c) => Number(c.id) === Number(check.id));
-      if (!exists) throw new Error('Checklist não encontrado na base Supabase.');
-
-      const payload = {
-        id: crypto.randomUUID(), checklist_id: Number(check.id), operator_name: operator, unidade: 'Delivery', date: today(), filled_at: new Date().toISOString(), status: f.hasProblem === 'Sim' ? 'Com problema' : 'Preenchido', has_problem: f.hasProblem === 'Sim', observacoes: f.observacoes, oknok: f.oknok, passagem: f.passagem
-      };
-      const { error: subErr } = await supabase.from('submissions').insert(payload);
-      if (subErr) throw subErr;
-
-      const uploaded = [];
-      if (files.manual) uploaded.push({ ...(await uploadFile(files.manual, `submissions/${payload.id}/manual`)), kind: 'manual' });
-      if (files.foto) uploaded.push({ ...(await uploadFile(files.foto, `submissions/${payload.id}/foto`)), kind: 'foto' });
-      if (uploaded.length) {
-        const rows = uploaded.map((f0) => ({ submission_id: payload.id, file_name: `${f0.kind}:${f0.name}`, file_path: f0.path, file_type: f0.type }));
-        const { error: fileErr } = await supabase.from('submission_files').insert(rows);
-        if (fileErr) throw fileErr;
+      const card = cards.find((c) => c.name === name);
+      const problem = answers['Itens com problema'] === 'Sim';
+      const payload = { id: crypto.randomUUID(), checklist_id: null, checklist_name: name, operator_name: operator, unidade: 'Delivery', date: today(), filled_at: new Date().toISOString(), status: problem ? 'Com problema' : 'Preenchido', has_problem: problem, observacoes: '', responses_json: { items: answers, horario_previsto: card.horario, origin_checklist: origin || null } };
+      const { data: inserted, error } = await supabase.from('submissions').insert(payload).select().single();
+      if (error) throw error;
+      const fileRows = [];
+      for (const [item, file] of Object.entries(files)) {
+        const up = await uploadFile(file, `submissions/${inserted.id}/${item}`);
+        if (up) fileRows.push({ submission_id: inserted.id, checklist_item: item, file_name: up.name, file_path: up.path, file_type: up.type });
       }
-
-      if (payload.has_problem && maintenanceTriggers.includes(check.categoria)) {
-        const { error: mErr } = await supabase.from('maintenance_records').insert({ submission_id: payload.id, date: today(), unidade: 'Delivery', checklist_origem: check.categoria, area_praca: m.area, item_problema: m.item, descricao_problema: m.descricao, responsible: operator, criticidade: m.criticidade, status: m.status, prazo_retorno: m.prazo, observacoes: m.observacoes });
-        if (mErr) throw mErr;
+      if (fileRows.length) await supabase.from('submission_files').insert(fileRows);
+      if (name === 'MANUTENÇÃO' || problem) {
+        await supabase.from('maintenance_records').insert({ submission_id: inserted.id, date: today(), unidade: 'Delivery', checklist_origem: origin || (problem ? name : null), area_praca: answers['Setor'] || '', item_problema: answers['Equipamento'] || '', descricao_problema: answers['Descrição breve do problema'] || '', responsible: operator, criticidade: answers['Criticidade do problema'] || '', status: 'Aberto', observacoes: '' });
       }
-
-      await fetchChecklistsAndSubmissions();
-      setActive(null);
-    } catch (e) {
-      alert(`Erro ao salvar no Supabase: ${e.message}`);
-    } finally { setSaving(false); }
+      await fetchSubs();
+      if (problem && name !== 'MANUTENÇÃO') setActive({ name: 'MANUTENÇÃO', origin: name }); else setActive(null);
+    } catch (e) { alert(`Erro ao salvar: ${e.message}`); }
+    setSaving(false);
   }
 
-  useEffect(() => { fetchChecklistsAndSubmissions(); }, []);
+  useEffect(() => { fetchSubs(); }, []);
   useEffect(() => localStorage.setItem('operator', operator), [operator]);
 
-  if (loading) return <main><h1>Checklist do Dia - Delivery</h1><p>Carregando dados do Supabase...</p></main>;
-  if (!checklists.length) return <main><h1>Checklist do Dia - Delivery</h1><p>Nenhum checklist cadastrado no Supabase para a unidade Delivery. Execute o seed SQL do arquivo <code>supabase/schema.sql</code>.</p><p><a href='/admin'>Ir para painel admin</a></p></main>;
-
-  return <main><h1>Checklist do Dia - Delivery</h1><p><a href='/preenchimento'>Acessar preenchimento</a> · <a href='/admin'>Acessar painel admin</a></p><input placeholder='Nome do Líder de Turno' value={operator} onChange={e => setOperator(e.target.value)} required />{ordered.map(c => { const st = status(c); return <article key={c.id} className={`card ${st}`}><h3>{c.categoria}</h3><p>{c.momento} · {c.frequencia}</p><p><b>Limite:</b> {deadlineText(c.horario_previsto)}</p><p><b>Responsável sugerido:</b> {c.responsavel_sugerido || '-'}</p><span>{st}</span><button disabled={!operator.trim()} onClick={() => setActive(c)}>{st === 'Preenchido' || st === 'Com problema' ? 'Visualizar envio' : 'Preencher'}</button></article>; })}{active && <ChecklistForm check={active} operator={operator} onClose={() => setActive(null)} onSave={save} saving={saving} />}</main>;
+  return <main><h1>Checklist do Dia - Delivery</h1><input placeholder='Nome do Líder de Turno' value={operator} onChange={e => setOperator(e.target.value)} />{cards.map((c) => { const st = statusFrom(c.name, subs); return <article key={c.name} className={`card ${st}`}><h2>{c.name}</h2><p><b>Limite:</b> {c.horario}</p><span>{st}</span><button disabled={!operator.trim()} onClick={() => setActive({ name: c.name })}>Preencher</button></article>; })}{active && <FillCardForm name={active.name} origin={active.origin} config={structure[active.name]} operator={operator} onSave={saveSubmission} saving={saving} onClose={() => setActive(null)} />}</main>;
 }
 
 export function AdminPage() {
-  const [subs, setSubs] = useState([]);
-  const [manu, setManu] = useState([]);
-  const [f, setF] = useState({ date: '', responsible: '', status: '' });
-
-  async function fetchData() {
-    const { data: sData } = await supabase.from('submissions').select('*, submission_files(*)').order('filled_at', { ascending: false });
-    const { data: mData } = await supabase.from('maintenance_records').select('*').order('date', { ascending: false });
-    setSubs(sData || []);
-    setManu(mData || []);
-  }
-
+  const [subs, setSubs] = useState([]); const [files, setFiles] = useState([]); const [manu, setManu] = useState([]);
+  const fetchData = async () => { const { data: s } = await supabase.from('submissions').select('*').order('filled_at', { ascending: false }); const { data: f } = await supabase.from('submission_files').select('*'); const { data: m } = await supabase.from('maintenance_records').select('*').order('date', { ascending: false }); setSubs(s || []); setFiles(f || []); setManu(m || []); };
   useEffect(() => { fetchData(); }, []);
-
-  const data = subs.filter(s => (!f.date || s.date === f.date) && (!f.responsible || (s.operator_name || '').includes(f.responsible)) && (!f.status || s.status === f.status));
-
-  const exportCsv = () => {
-    const rows = ['data,horario_preenchimento,checklist_id,responsavel,status,problema,observacoes,anexos'];
-    data.forEach(r => rows.push([r.date, r.filled_at, r.checklist_id, r.operator_name, r.status, r.has_problem ? 'Sim' : 'Não', `"${(r.observacoes || '').replaceAll('"', '""')}"`, (r.submission_files || []).map(x => fileUrl(x.file_path)).join('|')].join(',')));
-    const blob = new Blob([rows.join('\n')]);
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'historico_checklists.csv'; a.click();
-  };
-
-  return <main><h1>Painel Administrativo</h1><p><a href='/preenchimento'>Acessar preenchimento</a> · <a href='/admin'>Acessar painel admin</a></p><section className='grid'><div>Total previstos: 8</div><div>Total preenchido: {subs.length}</div><div>Com problema: {subs.filter(s => s.has_problem).length}</div><div>Pendentes: {Math.max(8 - subs.length, 0)}</div></section><section><h2>Filtros</h2><input type='date' onChange={e => setF({ ...f, date: e.target.value })} /><input placeholder='Responsável' onChange={e => setF({ ...f, responsible: e.target.value })} /><button onClick={fetchData}>Atualizar</button><button onClick={exportCsv}>Exportar CSV</button></section><table><thead><tr><th>Data</th><th>Checklist ID</th><th>Responsável</th><th>Status</th><th>Anexos</th></tr></thead><tbody>{data.map(r => <tr key={r.id}><td>{r.date}</td><td>{r.checklist_id}</td><td>{r.operator_name}</td><td>{r.status}</td><td>{(r.submission_files || []).map(x => <a key={x.id} href={fileUrl(x.file_path)} target='_blank'>{x.file_name}</a>)}</td></tr>)}</tbody></table><h2>Manutenções abertas</h2>{manu.filter(m => m.status !== 'Resolvido').map(m => <article key={m.id} className='card'><b>{m.checklist_origem}</b><p>{m.item_problema} - {m.descricao_problema}</p><p>{m.status} · {m.criticidade}</p></article>)}</main>;
+  const exportCsv = () => { const rows = ['data,checklist,responsavel,horario_envio,status,itens_marcados,teve_problema,manutencao,anexos']; subs.forEach((r) => { const itens = JSON.stringify(r.responses_json?.items || {}); const ann = files.filter(f => f.submission_id === r.id).map(f => fileUrl(f.file_path)).join('|'); const maint = manu.find(m => m.submission_id === r.id); rows.push([r.date, r.checklist_name, r.operator_name, r.filled_at, r.status, `"${itens.replaceAll('"','""')}"`, r.has_problem ? 'Sim' : 'Não', maint ? 'Sim' : 'Não', ann].join(',')); }); const blob = new Blob([rows.join('\n')]); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'historico_checklists.csv'; a.click(); };
+  return <main><h1>Painel Administrativo</h1><p><a href='/preenchimento'>Acessar preenchimento</a> · <a href='/admin'>Acessar painel admin</a></p><button onClick={fetchData}>Atualizar</button><button onClick={exportCsv}>Exportar CSV</button><table><thead><tr><th>Data</th><th>Card</th><th>Responsável</th><th>Status</th><th>Itens</th><th>Anexos</th></tr></thead><tbody>{subs.map((r) => <tr key={r.id}><td>{r.date}</td><td>{r.checklist_name}</td><td>{r.operator_name}</td><td>{r.status}</td><td><pre>{JSON.stringify(r.responses_json?.items || {}, null, 2)}</pre></td><td>{files.filter(f => f.submission_id === r.id).map(f => <a key={f.id} href={fileUrl(f.file_path)} target='_blank'>{f.file_name}</a>)}</td></tr>)}</tbody></table></main>;
 }
