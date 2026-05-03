@@ -30,3 +30,23 @@ npm run build
 - O admin abre anexos via URL assinada temporária (signed URL), sem salvar link permanente no banco.
 - No admin, anexos com mais de 40 dias são exibidos como **expirado**.
 - Limpeza física automática de arquivos antigos pode ser adicionada futuramente com rotina agendada.
+
+
+## Resumo diário por e-mail (Vercel Cron + Resend)
+Variáveis necessárias:
+- `RESEND_API_KEY`
+- `DAILY_SUMMARY_TO` (um ou mais e-mails separados por vírgula)
+- `DAILY_SUMMARY_FROM` (ex.: `Notorious Fish <onboarding@resend.dev>`)
+
+Agendamento automático:
+- `30 10 * * *` (10h30 UTC = 7h30 em São Paulo)
+- Endpoint: `/api/daily-summary`
+
+Teste manual:
+- `/api/daily-summary?dryRun=true` (não envia e-mail, só retorna resumo)
+- `/api/daily-summary?send=true` (envia e-mail de teste)
+
+Opcional de segurança:
+- `CRON_SECRET` para exigir `Authorization: Bearer <CRON_SECRET>` no endpoint.
+
+Verifique execução e erros nos logs da Vercel (Functions).
