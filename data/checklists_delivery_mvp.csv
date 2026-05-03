@@ -1,30 +1,29 @@
-ID;Unidade;Categoria;Momento;Frequência;Horário previsto;Responsável sugerido;Tipo de resposta;Obrigatório?;Anexo ficha manual?;Foto ambiente?;Campo aberto?;Instrução do preenchimento;Status no MVP;Observações
-1;Delivery;Abertura da casa;Manhã;Diária;Início do turno / abertura;Líder de cozinha ou responsável da abertura;Anexo + Foto;Sim;Sim;Sim;Não;Anexar a ficha manual já preenchida e registrar foto do ambiente/praça após organização da abertura.;Ativo;
-2;Delivery;Checagem de temperatura 1;Manhã;Diária - 2x ao dia;Após abertura / início da operação;Responsável da cozinha/produção;Anexo;Sim;Sim;Não;Não;Anexar a ficha manual de temperatura preenchida pela manhã.;Ativo;Primeira checagem do dia
-3;Delivery;Checklist de praça 1;Manhã;Diária - 2x ao dia;Após abertura / antes do início do serviço;Responsável da praça;Foto + checklist simples;Sim;Não;Sim;Opcional;Registrar foto da praça pronta e sinalizar se está OK para operação.;Ativo;Checklist visual de ambiente/prontidão
-4;Delivery;Troca de turno;Troca de turno;Diária;No momento da troca de turno;Responsável que entrega o turno;Texto aberto;Sim;Não;Não;Sim;Preencher em texto o que está sendo entregue/passado: pendências, rupturas, avisos, prioridades e pontos de atenção.;Ativo;
-5;Delivery;Checklist de praça 2;Troca de turno;Diária - 2x ao dia;Durante a troca de turno;Responsável que recebe o turno;Foto + checklist simples;Sim;Não;Sim;Opcional;Registrar foto da praça na passagem de turno e sinalizar condições para continuidade da operação.;Ativo;Segunda checagem do dia
-6;Delivery;Checagem de temperatura 2;Antes do fechamento;Diária - 2x ao dia;Antes do fechamento;Responsável do fechamento;Anexo;Sim;Sim;Não;Não;Anexar a ficha manual de temperatura preenchida antes do fechamento.;Ativo;Segunda checagem do dia
-7;Delivery;Fechamento da casa;Fechamento;Diária;Final do turno / fechamento;Responsável do fechamento;Anexo + Foto;Sim;Sim;Sim;Não;Anexar a ficha manual de fechamento já preenchida e registrar foto do ambiente/praça após organização final.;Ativo;
-8;Delivery;Limpeza da casa;Manhã / fechamento / conforme rotina;Diária;Conforme rotina definida;Responsável da limpeza ou líder do turno;Foto;Sim;Não;Sim;Não;Registrar foto do ambiente/praça após limpeza para evidenciar execução do serviço.;Ativo;Pode ser usado por área/praça, se necessário
-9;Delivery;Manutenção;Quando houver problema;Sob demanda;No momento da identificação;Qualquer responsável do turno;Texto + Foto + Data;Sim;Não;Sim;Sim;Registrar item com problema, descrição objetiva, foto, data de identificação, responsável e status de acompanhamento.;Ativo;Usar aba Manutencao para controle detalhado
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
+horario,nome_checklist,item_checklist,tipo_resposta,foto,obrigatorio,ordem,observacao
+Diário até às 10h30,ABERTURA,Produções,sim_nao,,sim,1,
+Diário até às 10h30,ABERTURA,Etiquetas,check,,sim,2,
+Diário até às 10h30,ABERTURA,"Conferência de Chapa, Fritadeira e Broiler",check,,sim,3,
+Diário até às 10h30,ABERTURA,Conferência Geladeiras e Freezers,check,,sim,4,
+Diário até às 10h30,ABERTURA,Requisição de viagens,sim_nao,,sim,5,
+Diário até às 10h30,ABERTURA,Itens com problema,sim_nao,,sim,6,"Se sim, direcionar para MANUTENÇÃO ao final"
+Diário até às 10h30,ABERTURA,Observações,texto_longo,,não,7,
+Diário de 14h40 às 16h20,TROCA DE TURNO,Produções,sim_nao,,sim,1,
+Diário de 14h40 às 16h20,TROCA DE TURNO,Etiquetas,check,,sim,2,
+Diário de 14h40 às 16h20,TROCA DE TURNO,Reposições - geladeira/molhos,check,,sim,3,
+Diário de 14h40 às 16h20,TROCA DE TURNO,Caixinhas/embalagens,sim_nao,,sim,4,
+Diário de 14h40 às 16h20,TROCA DE TURNO,Limpeza das praças,check,foto obrigatória,sim,5,
+Diário de 14h40 às 16h20,TROCA DE TURNO,Fichas de Temperatura,check,,sim,6,
+Diário de 14h40 às 16h20,TROCA DE TURNO,Recebimento de viagem,sim_nao,,sim,7,
+Diário de 14h40 às 16h20,TROCA DE TURNO,Itens com problema,sim_nao,,sim,8,"Se sim, direcionar para MANUTENÇÃO ao final"
+Diário de 14h40 às 16h20,TROCA DE TURNO,Observações,texto_longo,,não,9,
+Diário das 22h às 23h30,FECHAMENTO,Limpeza das praças,check,foto obrigatória,sim,1,
+Diário das 22h às 23h30,FECHAMENTO,Limpeza de equipamentos,check,foto obrigatória,sim,2,
+Diário das 22h às 23h30,FECHAMENTO,Filme nas GNs da pista fria,check,foto obrigatória,sim,3,
+Diário das 22h às 23h30,FECHAMENTO,Geladeiras e Freezers fechados e funcionando,check,foto obrigatória,sim,4,
+Diário das 22h às 23h30,FECHAMENTO,Lista de reposições e pedidos,sim_nao,,sim,5,
+Diário das 22h às 23h30,FECHAMENTO,Itens com problema,sim_nao,,sim,6,"Se sim, direcionar para MANUTENÇÃO ao final"
+Diário das 22h às 23h30,FECHAMENTO,Observações,texto_longo,,não,7,
+Diário - conforme sinalização,MANUTENÇÃO,Setor,selecao,"Cozinha|Expedição|Infraestrutura",sim,1,
+Diário - conforme sinalização,MANUTENÇÃO,Equipamento,texto_curto,,sim,2,
+Diário - conforme sinalização,MANUTENÇÃO,Descrição breve do problema,texto_curto,,sim,3,
+Diário - conforme sinalização,MANUTENÇÃO,Criticidade do problema,selecao,"baixa|média|grave|urgente",sim,4,
+Diário - conforme sinalização,MANUTENÇÃO,Evidência do problema,foto,foto obrigatória,sim,5,
