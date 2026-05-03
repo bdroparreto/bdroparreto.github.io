@@ -92,7 +92,7 @@ export function FillPage() {
   useEffect(() => { fetchCards(); fetchSubs(); }, []);
   useEffect(() => localStorage.setItem('operator', operator), [operator]);
 
-  return <main><h1>Checklist do Dia - Delivery</h1><input className='name-input' placeholder='Nome' value={operator} onChange={e => setOperator(e.target.value)} />{err && <p className='error-box'>{err}</p>}{cards.length === 0 ? <p>Nenhum checklist encontrado. Verifique o cadastro no Supabase.</p> : cards.map((c) => { const st = statusFrom(c, subs); return <article key={c.id || c.categoria} className={`card ${st} checklist-card`}><h2>{c.categoria}</h2><p><b>Limite:</b> {c.horario_previsto || c.horario}</p><span className='status-pill'>{st}</span><button className='primary' disabled={!operator.trim()} onClick={() => setActive({ card: c })}>Preencher</button></article>; })}{active?.card && <FillCardForm card={active.card} origin={active.origin} operator={operator} onSave={saveSubmission} saving={saving} onClose={() => setActive(null)} />}</main>;
+  return <main><header className='brand-header'><div className='brand-mark'>Notorious Fish</div><h1>Checklist do Dia - Delivery</h1></header><input className='name-input' placeholder='Nome' value={operator} onChange={e => setOperator(e.target.value)} />{err && <p className='error-box'>{err}</p>}{cards.length === 0 ? <p>Nenhum checklist encontrado. Verifique o cadastro no Supabase.</p> : cards.map((c) => { const st = statusFrom(c, subs); return <article key={c.id || c.categoria} className={`card ${st} checklist-card`}><h2>{c.categoria}</h2><p><b>Limite:</b> {c.horario_previsto || c.horario}</p><span className='status-pill'>{st}</span><button className='primary' disabled={!operator.trim()} onClick={() => setActive({ card: c })}>Preencher</button></article>; })}{active?.card && <FillCardForm card={active.card} origin={active.origin} operator={operator} onSave={saveSubmission} saving={saving} onClose={() => setActive(null)} />}</main>;
 }
 
 export function AdminPage() {
@@ -146,7 +146,7 @@ Acompanhar no painel admin.`;
   const preview = critAlerts.slice(0,5).map(m=>`- [${(m.criticidade||'não informado').toUpperCase()}] ${(m.item_problema||'item não informado')}/${(m.area_praca||'item não informado')}: ${m.descricao_problema||'sem descrição'}`).join('\n');
   const msgAlerta = critAlerts.length ? `🚨 Alertas manutenção - Delivery\n\n${preview}\n\nTotal: ${critAlerts.length} alerta(s) grave(s)/urgente(s)\n${critAlerts.length>5?`+ ${critAlerts.length-5} outros alertas no painel admin.\n`:''}\nFavor verificar prioridade.` : `✅ Alertas manutenção - Delivery\n\nNenhum alerta grave ou urgente aberto no momento.`;
 
-  return <main><h1>Painel Administrativo</h1><p>Resumo operacional dos checklists</p><p><a href='/preenchimento'>Acessar preenchimento</a></p>
+  return <main><header className='brand-header'><div className='brand-mark'>Notorious Fish</div><h1>Painel Administrativo</h1></header><p>Resumo operacional dos checklists</p><p><a href='/preenchimento'>Acessar preenchimento</a></p>
   <section className='dash-grid main-kpis'>
     <article className='dash-card'><h3>Cumprimento hoje</h3><p className='kpi-main'><b>{todayRequired}/3</b> · {cumprimentoPct}%</p><div className='progress'><div style={{width:`${cumprimentoPct}%`}} /></div></article>
     <article className='dash-card'><h3>Preenchidos hoje</h3><p className='kpi-main'><b>{todayRequired}</b></p></article>
