@@ -3,79 +3,90 @@ import { useEffect, useMemo, useState } from 'react';
 import csvRaw from '../data/checklists_delivery_mvp.csv?raw';
 import { supabase } from './lib/supabaseClient';
 
-const MAIN_ORDER = ['ABERTURA', 'TROCA DE TURNO', 'FECHAMENTO', 'MANUTENÇÃO'];
+const MAIN_ORDER = [101, 102, 103, 104];
 const today = () => new Date().toISOString().slice(0, 10);
 const nowHm = () => new Date().toTimeString().slice(0, 5);
 const toMinutes = (hhmm) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
 const fileUrl = (path) => supabase.storage.from('checklist-files').getPublicUrl(path).data.publicUrl;
 
-function parseCsvStructure() {
-  const parsed = Papa.parse(csvRaw, { header: true, delimiter: ';' }).data.filter(Boolean);
-  const grouped = {};
-  const hasNew = parsed[0] && 'nome_checklist' in parsed[0];
-  if (!hasNew) return {};
-  parsed.filter((r) => r.nome_checklist).forEach((r) => {
+function csvFallback() {
+  const parsed = Papa.parse(csvRaw, { header: true, delimiter: ';' }).data.filter((r) => r.nome_checklist);
+  const map = {};
+  parsed.forEach((r) => {
     const name = (r.nome_checklist || '').toUpperCase();
-    grouped[name] ??= { horario: r.horario || '', items: [] };
-    grouped[name].items.push({ item: r.item_checklist, tipo: (r.tipo_resposta || 'check').toLowerCase(), foto: (r.foto || '').toLowerCase() === 'sim', obrigatorio: (r.obrigatorio || '').toLowerCase() === 'sim', ordem: Number(r.ordem || 999), observacao: r.observacao || '' });
+    map[name] ??= { id: MAIN_ORDER.find((x, i) => ['ABERTURA', 'TROCA DE TURNO', 'FECHAMENTO', 'MANUTENÇÃO'][i] === name), categoria: name, horario_previsto: r.horario || '', items: [] };
+    map[name].items.push({ item_nome: r.item_checklist, tipo_resposta: r.tipo_resposta, foto_obrigatoria: (r.foto || '').toLowerCase() === 'sim', obrigatorio: (r.obrigatorio || '').toLowerCase() === 'sim', ordem: Number(r.ordem || 999), observacao: r.observacao || '' });
   });
-  return grouped;
+  return Object.values(map);
 }
 
 async function uploadFile(file, folder) { if (!file) return null; const ext = file.name.split('.').pop(); const path = `${folder}/${crypto.randomUUID()}.${ext}`; const { error } = await supabase.storage.from('checklist-files').upload(path, file, { upsert: false }); if (error) throw error; return { name: file.name, path, type: file.type || 'application/octet-stream' }; }
 
-function statusFrom(check, todaySub) { const s = todaySub.find((x) => x.checklist_name === check); if (s) return s.has_problem ? 'Com problema' : 'Preenchido'; const now = toMinutes(nowHm()); const limits = { ABERTURA: 10 * 60 + 30, 'TROCA DE TURNO': 16 * 60 + 20, FECHAMENTO: 23 * 60 + 30 }; if (limits[check] && now > limits[check]) return 'Atrasado'; return 'Pendente'; }
+function statusFrom(card, todaySub) { const s = todaySub.find((x) => x.checklist_name === card.categoria); if (s) return s.has_problem ? 'Com problema' : 'Preenchido'; const now = toMinutes(nowHm()); const limits = { 101: 10 * 60 + 30, 102: 16 * 60 + 20, 103: 23 * 60 + 30 }; if (limits[card.id] && now > limits[card.id]) return 'Atrasado'; return 'Pendente'; }
 
-function FillCardForm({ name, config, operator, onSave, saving, onClose, origin }) {
+function FillCardForm({ card, operator, onSave, saving, onClose, origin }) {
   const [answers, setAnswers] = useState({});
   const [files, setFiles] = useState({});
-  const items = [...config.items].sort((a, b) => a.ordem - b.ordem).filter((it) => !(name === 'MANUTENÇÃO' && it.item.toLowerCase() === 'observações'));
-  const missing = items.filter((it) => it.obrigatorio && ((it.foto && !files[it.item]) || (!it.foto && (answers[it.item] === undefined || answers[it.item] === ''))));
+  const name = card.categoria;
+  const items = [...(card.items || [])].sort((a, b) => (a.ordem || 999) - (b.ordem || 999)).filter((it) => !(name === 'MANUTENÇÃO' && (it.item_nome || '').toLowerCase() === 'observações'));
+  const missing = items.filter((it) => it.obrigatorio && ((it.foto_obrigatoria && !files[it.item_nome]) || (!it.foto_obrigatoria && (answers[it.item_nome] === undefined || answers[it.item_nome] === ''))));
   const valid = operator.trim() && missing.length === 0;
 
-  const getControl = (it) => {
-    if (it.item.toLowerCase() === 'observações') return <textarea rows={3} placeholder='Observações (opcional)' onChange={e => setAnswers({ ...answers, [it.item]: e.target.value })} />;
-    if (it.tipo === 'check') return <label className='inline-check'><input type='checkbox' checked={!!answers[it.item]} onChange={e => setAnswers({ ...answers, [it.item]: e.target.checked ? 'Sim' : '' })} /> Confirmado</label>;
-    if (it.tipo === 'sim_nao') return <div className='simnao'><button type='button' className={answers[it.item] === 'Sim' ? 'active' : ''} onClick={() => setAnswers({ ...answers, [it.item]: 'Sim' })}>Sim</button><button type='button' className={answers[it.item] === 'Não' ? 'active' : ''} onClick={() => setAnswers({ ...answers, [it.item]: 'Não' })}>Não</button></div>;
-    if (it.tipo === 'texto') return <input onChange={e => setAnswers({ ...answers, [it.item]: e.target.value })} />;
-    if (it.tipo === 'select') return <select onChange={e => setAnswers({ ...answers, [it.item]: e.target.value })}><option value=''>Selecione</option>{it.item === 'Setor' && ['Cozinha', 'Expedição', 'Infraestrutura'].map(v => <option key={v}>{v}</option>)}{it.item === 'Criticidade do problema' && ['baixa', 'média', 'grave', 'urgente'].map(v => <option key={v}>{v}</option>)}</select>;
-    return <input onChange={e => setAnswers({ ...answers, [it.item]: e.target.value })} />;
+  const control = (it) => {
+    const item = it.item_nome;
+    const tipo = (it.tipo_resposta || 'check').toLowerCase();
+    if (item.toLowerCase() === 'observações') return <textarea rows={3} placeholder='Observações (opcional)' onChange={e => setAnswers({ ...answers, [item]: e.target.value })} />;
+    if (tipo === 'check') return <label className='inline-check'><input type='checkbox' checked={!!answers[item]} onChange={e => setAnswers({ ...answers, [item]: e.target.checked ? 'Sim' : '' })} /> Confirmado</label>;
+    if (tipo === 'sim_nao') return <div className='simnao'><button type='button' className={answers[item] === 'Sim' ? 'active' : ''} onClick={() => setAnswers({ ...answers, [item]: 'Sim' })}>Sim</button><button type='button' className={answers[item] === 'Não' ? 'active' : ''} onClick={() => setAnswers({ ...answers, [item]: 'Não' })}>Não</button></div>;
+    if (tipo === 'texto') return <input onChange={e => setAnswers({ ...answers, [item]: e.target.value })} />;
+    return <select onChange={e => setAnswers({ ...answers, [item]: e.target.value })}><option value=''>Selecione</option>{item === 'Setor' && ['Cozinha', 'Expedição', 'Infraestrutura'].map(v => <option key={v}>{v}</option>)}{item === 'Criticidade do problema' && ['baixa', 'média', 'grave', 'urgente'].map(v => <option key={v}>{v}</option>)}</select>;
   };
 
-  return <div className='modal'><div className='card'><h2>{name}</h2>{origin && <p><b>Origem:</b> {origin}</p>}<p><b>Horário:</b> {config.horario}</p>{items.map((it) => <div key={it.item}><label><b>{it.item}</b> {it.obrigatorio ? '*' : ''}</label>{getControl(it)}{it.foto && <input type='file' accept='image/*,.pdf' onChange={e => setFiles({ ...files, [it.item]: e.target.files?.[0] || null })} />}</div>)}{missing.length > 0 && <p>Preencha todos os campos obrigatórios antes de finalizar.</p>}<button disabled={!valid || saving} onClick={() => onSave({ name, answers, files, origin })}>Finalizar</button><button onClick={onClose}>Cancelar</button></div></div>;
+  return <div className='modal'><div className='card'><h2>{name}</h2>{origin && <p><b>Origem:</b> {origin}</p>}<p><b>Horário:</b> {card.horario_previsto}</p>{items.map((it) => <div key={it.item_nome}><label><b>{it.item_nome}</b> {it.obrigatorio ? '*' : ''}</label>{control(it)}{it.foto_obrigatoria && <input type='file' accept='image/*,.pdf' onChange={e => setFiles({ ...files, [it.item_nome]: e.target.files?.[0] || null })} />}</div>)}{missing.length > 0 && <p>Preencha todos os campos obrigatórios antes de finalizar.</p>}<button disabled={!valid || saving} onClick={() => onSave({ card, answers, files, origin })}>Finalizar</button><button onClick={onClose}>Cancelar</button></div></div>;
 }
 
 export function FillPage() {
   const [operator, setOperator] = useState(localStorage.getItem('operator') || '');
-  const [structure] = useState(parseCsvStructure());
+  const [cards, setCards] = useState([]);
   const [subs, setSubs] = useState([]);
   const [active, setActive] = useState(null);
   const [saving, setSaving] = useState(false);
-  const cards = useMemo(() => MAIN_ORDER.filter((n) => structure[n]).map((n) => ({ name: n, ...structure[n] })), [structure]);
-  const fetchSubs = async () => { const { data } = await supabase.from('submissions').select('*').eq('date', today()); setSubs(data || []); };
+  const [err, setErr] = useState('');
 
-  async function saveSubmission({ name, answers, files, origin }) {
+  const fetchSubs = async () => { const { data } = await supabase.from('submissions').select('*').eq('date', today()); setSubs(data || []); };
+  const fetchCards = async () => {
+    setErr('');
+    const { data: checks, error: ec } = await supabase.from('checklists').select('id,categoria,horario_previsto').in('id', MAIN_ORDER).order('id');
+    const { data: items, error: ei } = await supabase.from('checklist_items').select('checklist_id,item_nome,tipo_resposta,foto_obrigatoria,obrigatorio,ordem,observacao').in('checklist_id', MAIN_ORDER).order('ordem');
+    if (ec || ei) {
+      setErr(`Falha ao carregar checklists: ${ec?.message || ei?.message}`);
+      const fb = csvFallback();
+      setCards(fb);
+      return;
+    }
+    const grouped = (checks || []).map((c) => ({ ...c, items: (items || []).filter((i) => i.checklist_id === c.id) }));
+    setCards(grouped);
+  };
+
+  async function saveSubmission({ card, answers, files, origin }) {
     setSaving(true);
     try {
-      const card = cards.find((c) => c.name === name);
       const problem = answers['Itens com problema'] === 'Sim';
-      const payload = { id: crypto.randomUUID(), checklist_id: null, checklist_name: name, operator_name: operator, unidade: 'Delivery', date: today(), filled_at: new Date().toISOString(), status: problem ? 'Com problema' : 'Preenchido', has_problem: problem, observacoes: answers['Observações'] || '', responses_json: { items: answers, horario_previsto: card.horario, origin_checklist: origin || null } };
-      const { data: inserted, error } = await supabase.from('submissions').insert(payload).select().single();
-      if (error) throw error;
-      const fileRows = [];
-      for (const [item, file] of Object.entries(files)) { const up = await uploadFile(file, `submissions/${inserted.id}/${item}`); if (up) fileRows.push({ submission_id: inserted.id, checklist_item: item, file_name: up.name, file_path: up.path, file_type: up.type }); }
+      const payload = { id: crypto.randomUUID(), checklist_id: card.id, checklist_name: card.categoria, operator_name: operator, unidade: 'Delivery', date: today(), filled_at: new Date().toISOString(), status: problem ? 'Com problema' : 'Preenchido', has_problem: problem, observacoes: answers['Observações'] || '', responses_json: { items: answers, horario_previsto: card.horario_previsto, origin_checklist: origin || null } };
+      const { data: inserted, error } = await supabase.from('submissions').insert(payload).select().single(); if (error) throw error;
+      const fileRows = []; for (const [item, file] of Object.entries(files)) { const up = await uploadFile(file, `submissions/${inserted.id}/${item}`); if (up) fileRows.push({ submission_id: inserted.id, checklist_item: item, file_name: up.name, file_path: up.path, file_type: up.type }); }
       if (fileRows.length) await supabase.from('submission_files').insert(fileRows);
-      if (name === 'MANUTENÇÃO' || problem) await supabase.from('maintenance_records').insert({ submission_id: inserted.id, date: today(), unidade: 'Delivery', checklist_origem: origin || (problem ? name : null), area_praca: answers['Setor'] || '', item_problema: answers['Equipamento'] || '', descricao_problema: answers['Descrição breve do problema'] || '', responsible: operator, criticidade: answers['Criticidade do problema'] || '', status: 'Aberto', observacoes: '' });
+      if (card.categoria === 'MANUTENÇÃO' || problem) await supabase.from('maintenance_records').insert({ submission_id: inserted.id, date: today(), unidade: 'Delivery', checklist_origem: origin || (problem ? card.categoria : null), area_praca: answers['Setor'] || '', item_problema: answers['Equipamento'] || '', descricao_problema: answers['Descrição breve do problema'] || '', responsible: operator, criticidade: answers['Criticidade do problema'] || '', status: 'Aberto', observacoes: '' });
       await fetchSubs();
-      if (problem && name !== 'MANUTENÇÃO') setActive({ name: 'MANUTENÇÃO', origin: name }); else setActive(null);
+      if (problem && card.categoria !== 'MANUTENÇÃO') setActive({ card: cards.find(c => c.categoria==='MANUTENÇÃO'), origin: card.categoria }); else setActive(null);
     } catch (e) { alert(`Erro ao salvar: ${e.message}`); }
     setSaving(false);
   }
 
-  useEffect(() => { fetchSubs(); }, []);
+  useEffect(() => { fetchCards(); fetchSubs(); }, []);
   useEffect(() => localStorage.setItem('operator', operator), [operator]);
 
-  return <main><h1>Checklist do Dia - Delivery</h1><input placeholder='Nome' value={operator} onChange={e => setOperator(e.target.value)} />{cards.map((c) => { const st = statusFrom(c.name, subs); return <article key={c.name} className={`card ${st}`}><h2>{c.name}</h2><p><b>Limite:</b> {c.horario}</p><span>{st}</span><button disabled={!operator.trim()} onClick={() => setActive({ name: c.name })}>Preencher</button></article>; })}{active && <FillCardForm name={active.name} origin={active.origin} config={structure[active.name]} operator={operator} onSave={saveSubmission} saving={saving} onClose={() => setActive(null)} />}</main>;
+  return <main><h1>Checklist do Dia - Delivery</h1><input placeholder='Nome' value={operator} onChange={e => setOperator(e.target.value)} />{err && <p>{err}</p>}{cards.length === 0 ? <p>Nenhum checklist encontrado. Verifique o cadastro no Supabase.</p> : cards.map((c) => { const st = statusFrom(c, subs); return <article key={c.id || c.categoria} className={`card ${st}`}><h2>{c.categoria}</h2><p><b>Limite:</b> {c.horario_previsto || c.horario}</p><span>{st}</span><button disabled={!operator.trim()} onClick={() => setActive({ card: c })}>Preencher</button></article>; })}{active?.card && <FillCardForm card={active.card} origin={active.origin} operator={operator} onSave={saveSubmission} saving={saving} onClose={() => setActive(null)} />}</main>;
 }
 
 export function AdminPage() {
