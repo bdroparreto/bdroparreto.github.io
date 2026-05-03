@@ -97,3 +97,6 @@ do $$ begin create policy "public submissions" on submissions for all using (tru
 do $$ begin create policy "public submission_item_responses" on submission_item_responses for all using (true) with check (true); exception when duplicate_object then null; end $$;
 do $$ begin create policy "public submission_files" on submission_files for all using (true) with check (true); exception when duplicate_object then null; end $$;
 do $$ begin create policy "public maintenance" on maintenance_records for all using (true) with check (true); exception when duplicate_object then null; end $$;
+
+alter table submission_files add column if not exists storage_path text;
+alter table submission_files add column if not exists uploaded_at timestamptz default now();

@@ -23,3 +23,10 @@ Bucket de arquivos: `checklist-files`.
 npm install
 npm run build
 ```
+
+
+## Anexos (Storage)
+- Arquivos de imagem/PDF são enviados para o bucket `checklist-files` no Supabase Storage.
+- O admin abre anexos via URL assinada temporária (signed URL), sem salvar link permanente no banco.
+- No admin, anexos com mais de 40 dias são exibidos como **expirado**.
+- Limpeza física automática de arquivos antigos pode ser adicionada futuramente com rotina agendada.

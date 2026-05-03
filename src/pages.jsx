@@ -80,7 +80,7 @@ export function FillPage() {
       const problem = answers['Itens com problema'] === 'Sim';
       const payload = { id: crypto.randomUUID(), checklist_id: card.id, checklist_name: card.categoria, operator_name: operator, unidade: 'Delivery', date: today(), filled_at: new Date().toISOString(), status: problem ? 'Com problema' : 'Preenchido', has_problem: problem, observacoes: answers['Observações'] || '', responses_json: { items: answers, horario_previsto: card.horario_previsto, origin_checklist: origin || null } };
       const { data: inserted, error } = await supabase.from('submissions').insert(payload).select().single(); if (error) throw error;
-      const fileRows = []; for (const [item, file] of Object.entries(files)) { const up = await uploadFile(file, `submissions/${inserted.id}/${item}`); if (up) fileRows.push({ submission_id: inserted.id, checklist_item: item, file_name: up.name, file_path: up.path, file_type: up.type }); }
+      const fileRows = []; for (const [item, file] of Object.entries(files)) { const up = await uploadFile(file, `${today()}/${card.id || card.categoria}/${inserted.id}/${item}`); if (up) fileRows.push({ submission_id: inserted.id, checklist_item: item, file_name: up.name, file_path: up.path, file_type: up.type }); }
       if (fileRows.length) await supabase.from('submission_files').insert(fileRows);
       if (card.categoria === 'MANUTENÇÃO' || problem) await supabase.from('maintenance_records').insert({ submission_id: inserted.id, date: today(), unidade: 'Delivery', checklist_origem: origin || (problem ? card.categoria : null), area_praca: answers['Setor'] || '', item_problema: answers['Equipamento'] || '', descricao_problema: answers['Descrição breve do problema'] || '', responsible: operator, criticidade: answers['Criticidade do problema'] || '', status: 'Aberto', observacoes: '' });
       await fetchSubs();
@@ -112,6 +112,23 @@ export function AdminPage() {
   const grave = openedManu.filter(m=>(m.criticidade||'').toLowerCase()==='grave').length;
   const last7 = subs.filter(s=>s.date>=dateMinusDays(6));
   const ranking = Object.entries(last7.reduce((a,s)=>{a[s.operator_name]=(a[s.operator_name]||0)+1;return a;},{})).sort((a,b)=>b[1]-a[1]).slice(0,3);
+
+
+  const isExpired40 = (file, subDate) => {
+    const ref = file.uploaded_at || file.created_at || subDate;
+    if (!ref) return false;
+    const dt = new Date(ref);
+    return (Date.now() - dt.getTime()) > (40*24*60*60*1000);
+  };
+  const openAttachment = async (file, subDate) => {
+    try {
+      if (isExpired40(file, subDate)) return;
+      const path = file.storage_path || file.file_path;
+      const { data, error } = await supabase.storage.from('checklist-files').createSignedUrl(path, 60 * 60 * 6);
+      if (error || !data?.signedUrl) throw error || new Error('URL inválida');
+      window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+    } catch { alert('Não foi possível abrir o anexo.'); }
+  };
 
   const exportCsv = () => { const rows = ['data,checklist,responsavel,horario_envio,status,observacoes,itens_marcados,teve_problema,manutencao,anexos']; subs.forEach((r) => { const itens = JSON.stringify(r.responses_json?.items || {}); const ann = files.filter(f => f.submission_id === r.id).map(f => fileUrl(f.file_path)).join('|'); const maint = manu.find(m => m.submission_id === r.id); rows.push([r.date, r.checklist_name, r.operator_name, r.filled_at, r.status, `"${(r.observacoes || '').replaceAll('"', '""')}"`, `"${itens.replaceAll('"', '""')}"`, r.has_problem ? 'Sim' : 'Não', maint ? 'Sim' : 'Não', ann].join(',')); }); const blob = new Blob([rows.join('\n')]); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'historico_checklists.csv'; a.click(); };
 
@@ -159,5 +176,5 @@ Acompanhar no painel admin.`;
     <article className='dash-card'><h3>Status dos checklists</h3><p><span className='chip ok'>Preenchido: {statusCount.preenchido}</span></p><p><span className='chip neutral'>Com problema: {statusCount.comProblema}</span></p><p><span className='chip warn'>Pendente: {statusCount.pendente}</span></p><p><span className='chip danger'>Atrasado: {statusCount.atrasado}</span></p></article>
   </section>
   <section className='dash-card whatsapp-box'><h3>Alertas para WhatsApp</h3><p>Mensagens prontas para colar no grupo da operação.</p><div className='admin-actions'><button onClick={()=>copyText(msgResumo)}>Copiar resumo do dia</button><button onClick={()=>copyText(msgPend)}>Copiar pendências de hoje</button><button onClick={()=>copyText(msgAlerta)}>Copiar alertas graves/urgentes</button></div>{copyMsg && <p className='chip ok'>{copyMsg}</p>}</section><div className='admin-actions'><button onClick={fetchData}>Atualizar</button><button onClick={exportCsv}>Exportar CSV</button></div>
-  <table><thead><tr><th>Data</th><th>Horário</th><th>Card</th><th>Responsável</th><th>Status</th><th>Observações</th><th>Problema</th><th>Manutenção</th><th>Anexos</th></tr></thead><tbody>{subs.map((r) => {const maint = manu.find(m=>m.submission_id===r.id); return <tr key={r.id}><td>{r.date}</td><td>{r.filled_at}</td><td>{r.checklist_name}</td><td>{r.operator_name}</td><td><span className='status-pill'>{r.status}</span></td><td>{r.observacoes||'—'}</td><td>{r.status==='Com problema'||r.has_problem?'Sim':'Não'}</td><td>{maint?'Sim':'Não'}</td><td>{files.filter(f => f.submission_id === r.id).map(f => <a key={f.id} href={fileUrl(f.file_path)} target='_blank'>{f.file_name}</a>)}</td></tr>})}</tbody></table></main>;
+  <table><thead><tr><th>Data</th><th>Horário</th><th>Card</th><th>Responsável</th><th>Status</th><th>Observações</th><th>Problema</th><th>Manutenção</th><th>Anexos</th></tr></thead><tbody>{subs.map((r) => {const maint = manu.find(m=>m.submission_id===r.id); return <tr key={r.id}><td>{r.date}</td><td>{r.filled_at}</td><td>{r.checklist_name}</td><td>{r.operator_name}</td><td><span className='status-pill'>{r.status}</span></td><td>{r.observacoes||'—'}</td><td>{r.status==='Com problema'||r.has_problem?'Sim':'Não'}</td><td>{maint?'Sim':'Não'}</td><td>{(() => { const fs = files.filter(f => f.submission_id === r.id); if (fs.length===0) return '—'; return fs.map(f => isExpired40(f, r.date) ? <span key={f.id} className='chip neutral'>expirado</span> : <button key={f.id} className='link-btn' onClick={()=>openAttachment(f, r.date)}>{(f.file_type||'').includes('pdf')?'Abrir PDF':'Ver foto'}</button>); })()}</td></tr>})}</tbody></table></main>;
 }
