@@ -5,3 +5,4 @@ body{font-family:Arial,sans-serif;margin:0;background:var(--color-vieira);color:
 
 .link-btn{width:auto;padding:4px 8px;margin:2px;border-radius:8px;border:1px solid var(--color-agua);background:#fff;color:var(--color-oceano);font-size:.8rem}
 .main-kpis{grid-template-columns:2fr 1fr}.kpi-row{grid-template-columns:repeat(3,1fr)}
+.status-pill.ok{background:#d9ece4;color:#0f4f4a}.status-pill.problem{background:#f8ddda;color:#8f291d}.status-pill.pending{background:#f9eec7;color:#8b6400}.status-pill.late{background:#f8ddda;color:#8f291d}
