@@ -115,17 +115,19 @@ export function AdminPage() {
 
   const exportCsv = () => { const rows = ['data,checklist,responsavel,horario_envio,status,observacoes,itens_marcados,teve_problema,manutencao,anexos']; subs.forEach((r) => { const itens = JSON.stringify(r.responses_json?.items || {}); const ann = files.filter(f => f.submission_id === r.id).map(f => fileUrl(f.file_path)).join('|'); const maint = manu.find(m => m.submission_id === r.id); rows.push([r.date, r.checklist_name, r.operator_name, r.filled_at, r.status, `"${(r.observacoes || '').replaceAll('"', '""')}"`, `"${itens.replaceAll('"', '""')}"`, r.has_problem ? 'Sim' : 'Não', maint ? 'Sim' : 'Não', ann].join(',')); }); const blob = new Blob([rows.join('\n')]); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'historico_checklists.csv'; a.click(); };
 
-  return <main><h1>Painel Admin</h1><p>Resumo operacional dos checklists</p><p><a href='/preenchimento'>Acessar preenchimento</a></p>
-  <section className='dash-grid'>
-    <article className='dash-card'><h3>Cumprimento hoje</h3><p><b>{todayRequired}/3</b> · {cumprimentoPct}%</p></article>
-    <article className='dash-card'><h3>Preenchidos hoje</h3><p><b>{todayRequired}</b></p></article>
-    <article className='dash-card'><h3>Pendentes / Atrasados</h3><p><span className='warn'>{pendentes} pendentes</span> · <span className='danger'>{atrasados} atrasados</span></p></article>
-    <article className='dash-card'><h3>Alertas críticos</h3><p>{urg} urgente · {grave} grave</p></article>
+  const statusCount = { preenchido: todaySubs.filter(s=>s.status==='Preenchido').length, comProblema: todaySubs.filter(s=>s.status==='Com problema').length, pendente: pendentes, atrasado: atrasados };
+  return <main><h1>Painel Administrativo</h1><p>Resumo operacional dos checklists</p><p><a href='/preenchimento'>Acessar preenchimento</a></p>
+  <section className='dash-grid main-kpis'>
+    <article className='dash-card'><h3>Cumprimento hoje</h3><p className='kpi-main'><b>{todayRequired}/3</b> · {cumprimentoPct}%</p><div className='progress'><div style={{width:`${cumprimentoPct}%`}} /></div></article>
+    <article className='dash-card'><h3>Preenchidos hoje</h3><p className='kpi-main'><b>{todayRequired}</b></p></article>
+    <article className='dash-card'><h3>Pendentes / Atrasados</h3><p><span className='chip warn'>{pendentes} pendentes</span></p><p><span className='chip danger'>{atrasados} atrasados</span></p></article>
+    <article className='dash-card'><h3>Alertas críticos e urgentes</h3><p className='kpi-main'><b>{urg+grave}</b></p><p>{urg+grave===0?'sem alertas críticos':`${urg} urgente · ${grave} grave`}</p></article>
   </section>
   <section className='dash-grid'>
-    <article className='dash-card'><h3>Ranking (7 dias)</h3><ol>{ranking.map(([n,v])=><li key={n}>{n} — {v}</li>)}</ol></article>
-    <article className='dash-card'><h3>Pendências de hoje</h3>{pendAtras.filter(p=>p.status!=='preenchido').map(p=><p key={p.name}>{p.name} — <span className={p.status==='atrasado'?'danger':'warn'}>{p.status}</span></p>)}</article>
+    <article className='dash-card'><h3>Ranking de preenchimento (7 dias)</h3>{ranking.length===0?<p>Sem dados</p>:<ol>{ranking.map(([n,v])=>{const max=ranking[0][1]||1;return <li key={n}>{n} — {v}<div className='mini-bar'><span style={{width:`${Math.round((v/max)*100)}%`}} /></div></li>})}</ol>}</article>
+    <article className='dash-card'><h3>Pendências de hoje</h3>{pendAtras.filter(p=>p.status!=='preenchido').length===0?<p>Nenhuma pendência hoje</p>:pendAtras.filter(p=>p.status!=='preenchido').map(p=><p key={p.name}>{p.name} — <span className={`chip ${p.status==='atrasado'?'danger':'warn'}`}>{p.status==='atrasado'?'Atrasado':'Pendente'}</span></p>)}</article>
+    <article className='dash-card'><h3>Status dos checklists</h3><p><span className='chip ok'>Preenchido: {statusCount.preenchido}</span></p><p><span className='chip neutral'>Com problema: {statusCount.comProblema}</span></p><p><span className='chip warn'>Pendente: {statusCount.pendente}</span></p><p><span className='chip danger'>Atrasado: {statusCount.atrasado}</span></p></article>
   </section>
-  <button onClick={fetchData}>Atualizar</button><button onClick={exportCsv}>Exportar CSV</button>
-  <table><thead><tr><th>Data</th><th>Horário</th><th>Card</th><th>Responsável</th><th>Status</th><th>Problema</th><th>Manutenção</th><th>Anexos</th></tr></thead><tbody>{subs.map((r) => {const maint = manu.find(m=>m.submission_id===r.id); return <tr key={r.id}><td>{r.date}</td><td>{r.filled_at}</td><td>{r.checklist_name}</td><td>{r.operator_name}</td><td><span className='status-pill'>{r.status}</span></td><td>{r.has_problem?'Sim':'Não'}</td><td>{maint?'Sim':'Não'}</td><td>{files.filter(f => f.submission_id === r.id).map(f => <a key={f.id} href={fileUrl(f.file_path)} target='_blank'>{f.file_name}</a>)}</td></tr>})}</tbody></table></main>;
+  <div className='admin-actions'><button onClick={fetchData}>Atualizar</button><button onClick={exportCsv}>Exportar CSV</button></div>
+  <table><thead><tr><th>Data</th><th>Horário</th><th>Card</th><th>Responsável</th><th>Status</th><th>Observações</th><th>Problema</th><th>Manutenção</th><th>Anexos</th></tr></thead><tbody>{subs.map((r) => {const maint = manu.find(m=>m.submission_id===r.id); return <tr key={r.id}><td>{r.date}</td><td>{r.filled_at}</td><td>{r.checklist_name}</td><td>{r.operator_name}</td><td><span className='status-pill'>{r.status}</span></td><td>{r.observacoes||'—'}</td><td>{r.status==='Com problema'||r.has_problem?'Sim':'Não'}</td><td>{maint?'Sim':'Não'}</td><td>{files.filter(f => f.submission_id === r.id).map(f => <a key={f.id} href={fileUrl(f.file_path)} target='_blank'>{f.file_name}</a>)}</td></tr>})}</tbody></table></main>;
 }
